@@ -4,3 +4,4 @@
 exp/
 data/**/images
 src/models/old
+.idea
