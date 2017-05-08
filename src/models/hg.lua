@@ -1,4 +1,6 @@
-paths.dofile('layers/Residual.lua')
+--paths.dofile('layers/Residual.lua')
+paths.dofile('layers/NewResidual.lua')
+require 'nngraph'
 
 local function hourglass(n, f, inp)
     -- Upper branch
@@ -26,7 +28,7 @@ end
 
 local function lin(numIn,numOut,inp)
     -- Apply 1x1 convolution, stride 1, no padding
-    local l = nnlib.SpatialConvolution(numIn,numOut,1,1,1,1,0,0)(inp)
+    local l = nnlib.SpatialConvolution(numIn,numOut,1,1,1,1,0,0):noBias()(inp)
     return nnlib.ReLU(true)(nn.SpatialBatchNormalization(numOut)(l))
 end
 
@@ -35,7 +37,7 @@ function createModel()
     local inp = nn.Identity()()
 
     -- Initial processing of the image
-    local cnv1_ = nnlib.SpatialConvolution(3,64,7,7,2,2,3,3)(inp)           -- 128
+    local cnv1_ = nnlib.SpatialConvolution(3,64,7,7,2,2,3,3):noBias()(inp)           -- 128
     local cnv1 = nnlib.ReLU(true)(nn.SpatialBatchNormalization(64)(cnv1_))
     local r1 = Residual(64,128)(cnv1)
     local pool = nnlib.SpatialMaxPooling(2,2,2,2)(r1)                       -- 64
@@ -47,6 +49,7 @@ function createModel()
 
     for i = 1,opt.nStack do
         local hg = hourglass(4,opt.nFeats,inter)
+--        local hg = hourglass(2,opt.nFeats,inter)
 
         -- Residual layers at output resolution
         local ll = hg
@@ -55,19 +58,25 @@ function createModel()
         ll = lin(opt.nFeats,opt.nFeats,ll)
 
         -- Predicted heatmaps
-        local tmpOut = nnlib.SpatialConvolution(opt.nFeats,ref.nOutChannels,1,1,1,1,0,0)(ll)
+        local tmpOut = nnlib.SpatialConvolution(opt.nFeats,ref.nOutChannels,1,1,1,1,0,0):noBias()(ll)
         table.insert(out,tmpOut)
 
         -- Add predictions back
         if i < opt.nStack then
-            local ll_ = nnlib.SpatialConvolution(opt.nFeats,opt.nFeats,1,1,1,1,0,0)(ll)
-            local tmpOut_ = nnlib.SpatialConvolution(ref.nOutChannels,opt.nFeats,1,1,1,1,0,0)(tmpOut)
+            local ll_ = nnlib.SpatialConvolution(opt.nFeats,opt.nFeats,1,1,1,1,0,0):noBias()(ll)
+            local tmpOut_ = nnlib.SpatialConvolution(ref.nOutChannels,opt.nFeats,1,1,1,1,0,0):noBias()(tmpOut)
             inter = nn.CAddTable()({inter, ll_, tmpOut_})
         end
     end
 
+
     -- Final model
     local model = nn.gModule({inp}, out)
+
+    graph.dot(model.fg, 'hourglass', 'models/single_hg_new_bottleneck')
+    params, gradParams = model:getParameters()
+    print(params:size(1))
+    sys.sleep(5)
 
     return model
 

@@ -12,6 +12,7 @@ torch.setdefaulttensortype('torch.FloatTensor')
 
 -- Project directory
 projectDir = paths.concat(os.getenv('HOME'),'pose-hg-train')
+dataDir = paths.concat(os.getenv('HOME'),'Documents')
 
 -- Process command line arguments, load helper functions
 paths.dofile('opts.lua')
